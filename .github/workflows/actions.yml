@@ -1,0 +1,69 @@
+name: CI
+on:
+  push:
+    branches:
+      - "!*"
+    tags:
+      - "v*"
+
+  workflow_dispatch:
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [20.x]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - name: Use Node ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: "pnpm"
+      - name: Cache pnpm deps
+        uses: actions/cache@v4
+        with:
+          path: ~/.pnpm-store
+          key: node-cache-${{ runner.os }}-pnpm-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: |
+            node-cache-${{ runner.os }}-pnpm-
+      - name: Install deps and Build
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm build
+
+      - name: Archive Build Artifacts
+        run: tar -czf dist.tar.gz -C dist .
+
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-artifact
+          path: dist.tar.gz
+
+      - name: Transfer to Server
+        uses: appleboy/scp-action@master
+        with:
+          host: ${{ secrets.REMOTE_HOST }}
+          username: ${{ secrets.REMOTE_USERNAME }}
+          key: ${{ secrets.PRIVATE_KEY }}
+          source: "dist.tar.gz"
+          target: "/usr/local/apps"
+
+      - name: Login Server and Unzip
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.REMOTE_HOST }}
+          username: ${{ secrets.REMOTE_USERNAME }}
+          key: ${{ secrets.PRIVATE_KEY }}
+          script: |
+            set -e
+            cd /usr/local/apps
+            tar -xzf dist.tar.gz -C density
+            rm dist.tar.gz

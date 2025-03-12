@@ -1,0 +1,4 @@
+@custom-variant dark (&:where(.dark, .dark *));
+@theme {
+  --color-test: var(--color-background);
+}
