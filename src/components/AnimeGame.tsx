@@ -2,13 +2,12 @@
  * @Author: kasuie
  * @Date: 2025-02-24 09:54:42
  * @LastEditors: kasuie
- * @LastEditTime: 2025-03-10 21:16:11
+ * @LastEditTime: 2025-04-14 10:34:17
  * @Description:
  */
 import { computed, defineComponent, onMounted, onUnmounted, ref, watch } from "vue";
 import { clsx, getRandomElements, shuffleArray, storage } from "@kasuie/utils";
 import CusImage from "./CusImage";
-
 export default defineComponent({
   props: {
     data: {
@@ -119,7 +118,11 @@ export default defineComponent({
       setTimeout(() => {
         status.value = "none";
         reply.value = "";
-        ++activeIndex.value;
+        if (activeIndex.value + 1 >= props.data.length) {
+          activeIndex.value = 0;
+        } else {
+          ++activeIndex.value;
+        }
       }, 800);
     };
 
@@ -252,7 +255,7 @@ export default defineComponent({
           />
         </div>
         <div class={"w-[95%] md:w-[500px] flex items-center justify-between opacity-70"}>
-          <span>当前:{activeIndex.value + 1}题</span>
+          <span>当前:{historyData.value.length + 1}题</span>
           <span>计分:{count.value}分</span>
         </div>
         <ul
