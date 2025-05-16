@@ -1,0 +1,36 @@
+.nav-item {
+  transition: all 0.3s ease-in-out;
+}
+.nav-item::before {
+  position: absolute;
+  content: "";
+  width: 0;
+  height: 6px;
+  bottom: 6px;
+  left: 0;
+  background: linear-gradient(
+    to right,
+    rgba(255, 165, 0, 0.1),
+    rgba(255, 165, 0, 0.8)
+  );
+  border-radius: 4px;
+  transition: all 0.3s ease-in-out;
+  /* background-image: linear-gradient(
+    to right,
+    0%,
+    #ff8177 0%,
+    #ff8177 21%,
+    #ff8177 52%,
+    #ff8177 78%,
+    #ff8177 100%
+  ); */
+}
+.nav-item-active {
+  font-size: 20px;
+}
+.nav-item-active::before {
+  width: 90%;
+}
+.active-tab > span:first-child {
+  color: rgba(255, 165, 0, 0.8);
+}
