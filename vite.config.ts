@@ -2,7 +2,7 @@
  * @Author: kasuie
  * @Date: 2025-02-23 10:01:07
  * @LastEditors: kasuie
- * @LastEditTime: 2025-03-12 18:15:52
+ * @LastEditTime: 2025-05-16 18:34:32
  * @Description:
  */
 import { fileURLToPath, URL } from "node:url";
@@ -17,7 +17,16 @@ import vueDevTools from "vite-plugin-vue-devtools";
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd());
   return {
-    plugins: [vue(), vueJsx(), vueDevTools(), tailwindcss()],
+    plugins: [
+      vue({
+        template: {
+          compilerOptions: { isCustomElement: (tag) => tag.startsWith("wc-") },
+        },
+      }),
+      vueJsx(),
+      vueDevTools(),
+      tailwindcss(),
+    ],
     resolve: {
       alias: {
         "@": fileURLToPath(new URL("./src", import.meta.url)),

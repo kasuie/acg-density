@@ -2,10 +2,11 @@
  * @Author: kasuie
  * @Date: 2025-02-23 10:01:07
  * @LastEditors: kasuie
- * @LastEditTime: 2025-03-06 17:03:25
+ * @LastEditTime: 2025-05-16 18:33:45
  * @Description:
  */
 import "./assets/main.css";
+import "wc-waterfall";
 
 import { createApp } from "vue";
 import { createPinia } from "pinia";

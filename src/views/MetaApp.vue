@@ -2,11 +2,15 @@
  * @Author: kasuie
  * @Date: 2025-02-23 10:01:07
  * @LastEditors: kasuie
- * @LastEditTime: 2025-05-15 17:32:43
+ * @LastEditTime: 2025-05-16 18:35:29
  * @Description:
 -->
 <script setup lang="ts">
-import { onMounted, reactive, ref } from "vue";
+import { onMounted, onUnmounted, reactive, ref } from "vue";
+import BScroll from "@better-scroll/core";
+import PullDown from "@better-scroll/pull-down";
+import PullUp from "@better-scroll/pull-up";
+import fetch from "@/lib/fetch";
 
 const tabs = reactive([
   {
@@ -32,42 +36,109 @@ const tabs = reactive([
 ]);
 
 const scrollContainer = ref<HTMLElement | null>(null);
-const items = ref<{ title: string }[]>([]);
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const items = ref<Record<string, any>[]>([]);
 const page = ref(1);
 const isLoading = ref(false);
 const hasMore = ref(true);
 
+const bs = ref<BScroll>();
+const isPullUpLoad = ref(false);
+const topTip = ref("");
+
 // 模拟加载数据
-const loadData = async () => {
+const loadData = async (init: boolean = false) => {
+  console.log("loadData>>>");
+
   if (isLoading.value || !hasMore.value) return;
+  if (init) {
+    page.value = 1;
+  }
 
   isLoading.value = true;
+  topTip.value = "加载中...";
   // 模拟网络请求
-  await new Promise((r) => setTimeout(r, 500));
-  const newItems = Array.from({ length: 10 }, (_, i) => ({
-    title: `项目 ${(page.value - 1) * 10 + i + 1}`,
-  }));
-
-  if (newItems.length === 0) hasMore.value = false;
-
-  items.value.push(...newItems);
-  page.value++;
-  isLoading.value = false;
+  fetch
+    .get(
+      "/apis/img/multiples",
+      {
+        r18: 2,
+        sizes: ["original", "small"],
+        proxy: "i.pixiv.re",
+        size: 10,
+        current: page.value,
+      },
+      {
+        headers: {
+          author: "kasuie",
+        },
+      }
+    )
+    .then((res) => {
+      if (res.success) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { records, pages, current }: any = res.data;
+        if (pages === current) hasMore.value = false;
+        topTip.value = "加载完成";
+        if (init) {
+          items.value = records;
+        } else {
+          items.value.push(...records);
+        }
+        page.value++;
+        isLoading.value = false;
+      }
+    });
 };
 
-// 监听滚动触底
-const onScroll = () => {
-  const el = scrollContainer.value;
-  if (!el) return;
-
-  const scrollBottom = el.scrollTop + el.clientHeight;
-  if (scrollBottom >= el.scrollHeight - 50) {
-    loadData();
+const initScroll = () => {
+  if (scrollContainer.value) {
+    BScroll.use(PullUp).use(PullDown);
+    bs.value = new BScroll(scrollContainer.value, {
+      scrollY: true,
+      pullUpLoad: {
+        threshold: -50,
+      },
+      pullDownRefresh: true,
+    });
+    bs.value.on("enterThreshold", () => {
+      topTip.value = "下拉刷新";
+    });
+    bs.value.on("leaveThreshold", () => {
+      topTip.value = "松手刷新";
+    });
+    bs.value.on("pullingDown", pullingDownHandler);
+    bs.value.on("pullingUp", pullingUpHandler);
   }
 };
 
+const pullingDownHandler = async () => {
+  console.log("pullingDownHandler>>>");
+  await loadData(true);
+  bs.value?.finishPullDown();
+  setTimeout(() => {
+    bs.value?.refresh();
+  }, 850);
+};
+
+const pullingUpHandler = async () => {
+  console.log("pullingUpHandler>>>");
+  isPullUpLoad.value = true;
+  await loadData();
+  bs.value?.finishPullUp();
+  setTimeout(() => {
+    bs.value?.refresh();
+  }, 850);
+  isPullUpLoad.value = false;
+};
+
 onMounted(() => {
+  initScroll();
   loadData();
+});
+
+onUnmounted(() => {
+  bs.value?.destroy();
 });
 </script>
 
@@ -83,19 +154,53 @@ onMounted(() => {
         <span>x</span>
       </div>
     </div>
-    <div class="overflow-auto h-[calc(100vh-7rem)]" ref="scrollContainer" @scroll="onScroll">
-      <!-- 渲染瀑布流内容 -->
-      <div class="columns-2 gap-4" v-if="items.length">
+    <div class="overflow-hidden h-[calc(100vh-7rem)] relative" ref="scrollContainer">
+      <div class="px-1">
         <div
-          v-for="(item, index) in items"
-          :key="index"
-          class="break-inside-avoid mb-4 h-58 bg-white rounded shadow p-2"
+          class="w-full absolute p-4 box-border text-center text-gray-600"
+          style="transform: translateY(-100%) translateZ(0)"
         >
-          <p class="text-sm">{{ item.title }}</p>
-          <!-- 可以放图片、卡片等内容 -->
+          <div v-html="topTip"></div>
+        </div>
+        <!-- 渲染瀑布流内容 -->
+        <div class="1columns-2 1gap-2" v-if="items.length">
+          <wc-waterfall gap="10" cols="2">
+            <div
+              v-for="(item, index) in items"
+              :key="index"
+              class="break-inside-avoid bg-white rounded shadow pb-2 !mb-2"
+            >
+              <div>
+                <img
+                  :src="item.urls?.small"
+                  :alt="item.title"
+                  class="w-full object-cover rounded"
+                />
+              </div>
+              <h2 class="text-blod text-xl py-1">{{ item.title }}</h2>
+              <p class="text-xs">{{ item.pid }}</p>
+              <div class="flex items-center gap-2 mt-2">
+                <img
+                  :src="item.urls?.small"
+                  :alt="item.title"
+                  class="w-8 h-8 object-cover rounded-full"
+                />
+                <span>{{ item.author }}</span>
+              </div>
+              <!-- 可以放图片、卡片等内容 -->
+            </div>
+          </wc-waterfall>
+        </div>
+        <!-- <div v-else class="text-center text-gray-400 py-8">暂无内容</div> -->
+        <div class="w-full p-4 box-border text-center text-gray-600">
+          <div v-if="!isPullUpLoad">
+            <span>上划加载更多</span>
+          </div>
+          <div v-else>
+            <span>加载中...</span>
+          </div>
         </div>
       </div>
-      <div v-else class="text-center text-gray-400 py-8">暂无内容</div>
     </div>
     <ul class="px-8 h-16 w-full flex justify-between items-center">
       <li
