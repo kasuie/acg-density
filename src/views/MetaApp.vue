@@ -2,38 +2,52 @@
  * @Author: kasuie
  * @Date: 2025-02-23 10:01:07
  * @LastEditors: kasuie
- * @LastEditTime: 2025-05-16 22:58:33
+ * @LastEditTime: 2025-05-17 21:41:49
  * @Description:
 -->
 <script setup lang="ts">
-import { nextTick, onMounted, onUnmounted, reactive, ref, watchEffect } from "vue";
+import { onMounted, onUnmounted, reactive, ref } from "vue";
 import BScroll from "@better-scroll/core";
 import PullDown from "@better-scroll/pull-down";
 import PullUp from "@better-scroll/pull-up";
 import fetch from "@/lib/fetch";
 import { clsx } from "@kasuie/utils";
+import {
+  Home,
+  Search,
+  Chat,
+  Night,
+  Cookie,
+  Person,
+  Discord,
+  Good,
+  Play,
+  Pause,
+} from "@/components/IconLib";
 import "@/assets/meta.css";
+import { makeBlurDataURL } from "@/lib/image";
+import { useRoute } from "vue-router";
 
 const tabs = reactive([
   {
     name: "首页",
-    icon: "iconfont icon-shouye",
+    icon: Home,
   },
   {
     name: "社区",
-    icon: "iconfont icon-game",
+    icon: Night,
   },
   {
     name: "创作",
-    icon: "iconfont icon-wode",
+    icon: Cookie,
   },
   {
     name: "找游戏",
-    icon: "iconfont icon-wode",
+    icon: Discord,
   },
   {
     name: "我的",
-    icon: "iconfont icon-wode",
+    icon: Person,
   },
 ]);
 
@@ -43,9 +57,8 @@ const videoRefs = ref<HTMLVideoElement[]>([]);
 const activeNav = ref("发现");
 const activeTab = ref(1);
 
+const currentVideoIndex = ref<number>();
 const currentVideo = ref<HTMLVideoElement | null>(null);
-let observer: IntersectionObserver | null = null;
-const observedSet = new Set<HTMLVideoElement>();
 
 const scrollContainer = ref<HTMLElement | null>(null);
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -58,11 +71,8 @@ const bs = ref<BScroll>();
 const isPullUpLoad = ref(false);
 const topTip = ref("");
 
-watchEffect(() => {
-  nextTick(() => {
-    observeVideos();
-  });
-});
+const imageLoaded = ref<boolean[]>([]);
+const route = useRoute();
 
 // 模拟加载数据
 const loadData = async (init: boolean = false) => {
@@ -105,8 +115,11 @@ const loadData = async (init: boolean = false) => {
           items.value.push(...data);
         }
         page.value++;
-        isLoading.value = false;
       }
+    })
+    .finally(() => {
+      isLoading.value = false;
+      isPullUpLoad.value = false;
     });
 };
 
@@ -144,7 +157,13 @@ const initScroll = () => {
       pullUpLoad: {
         threshold: -50,
       },
-      pullDownRefresh: true,
+      bounceTime: 800,
+      useTransition: false,
+      // pullDownRefresh: true,
+      pullDownRefresh: {
+        threshold: 70,
+        stop: 30,
+      },
     });
     bs.value.on("enterThreshold", () => {
       topTip.value = "下拉刷新";
@@ -159,71 +178,44 @@ const initScroll = () => {
 
 const pullingDownHandler = async () => {
   console.log("pullingDownHandler>>>");
-  await loadData(true);
-  bs.value?.finishPullDown();
-  setTimeout(() => {
-    bs.value?.refresh();
-  }, 850);
+  isLoading.value = false;
+  await loadData(true).then(() => {
+    bs.value?.finishPullDown();
+    setTimeout(() => {
+      bs.value?.refresh();
+    }, 850);
+  });
 };
 
 const pullingUpHandler = async () => {
   console.log("pullingUpHandler>>>");
   isPullUpLoad.value = true;
-  await loadData();
-  bs.value?.finishPullUp();
-  setTimeout(() => {
-    bs.value?.refresh();
-  }, 850);
-  isPullUpLoad.value = false;
+  await loadData().then(() => {
+    bs.value?.finishPullUp();
+    setTimeout(() => {
+      bs.value?.refresh();
+    }, 850);
+  });
 };
 
 onMounted(() => {
+  const initPage = route.query.page;
+  if (initPage) {
+    page.value = +initPage > 10 ? 10 : +initPage;
+  }
   initScroll();
   loadData();
-  createObserver();
-  observeVideos();
 });
 
 onUnmounted(() => {
   bs.value?.destroy();
-  observer?.disconnect();
-  observedSet.clear();
 });
-
-const createObserver = () => {
-  observer = new IntersectionObserver(
-    (entries) => {
-      for (const entry of entries) {
-        const video = entry.target as HTMLVideoElement;
-        console.log(video, ">>>", entries);
-
-        if (!entry.isIntersecting && currentVideo.value === video) {
-          video.pause();
-          video.muted = true;
-          currentVideo.value = null;
-        }
-      }
-    },
-    {
-      threshold: 0.25,
-    }
-  );
-};
-
-const observeVideos = () => {
-  videoRefs.value.forEach((video) => {
-    if (video && !observedSet.has(video)) {
-      observer?.observe(video);
-      observedSet.add(video);
-    }
-  });
-};
 
 const onNavClick = (key: string) => {
   activeNav.value = key;
 };
 
-const togglePlay = (videoEl: HTMLVideoElement) => {
+const togglePlay = (videoEl: HTMLVideoElement, index: number) => {
   if (!videoEl) return;
 
   // 如果点击的是当前视频，暂停
@@ -231,13 +223,14 @@ const togglePlay = (videoEl: HTMLVideoElement) => {
     videoEl.pause();
     videoEl.muted = true; // 可选：暂停时静音
     currentVideo.value = null;
+    currentVideoIndex.value = -1;
   } else {
     // 暂停上一个播放的视频并静音
     if (currentVideo.value && !currentVideo.value.paused) {
       currentVideo.value.pause();
       currentVideo.value.muted = true;
     }
-
+    currentVideoIndex.value = index;
     // 取消静音 + 播放新视频
     videoEl.muted = false;
     videoEl.play();
@@ -248,10 +241,14 @@ const togglePlay = (videoEl: HTMLVideoElement) => {
 const onTabClick = (index: number) => {
   activeTab.value = index;
 };
+
+function handleImageLoad(index: number) {
+  imageLoaded.value[index] = true;
+}
 </script>
 
 <template>
-  <div class="flex flex-col h-screen bg-[#f7f6f4]">
+  <div class="flex flex-col h-screen bg-[#f7f6f4] min-w-[360px]">
     <div class="px-4 h-12 flex items-center justify-between">
       <div class="flex items-center flex-1 gap-6">
         <span
@@ -266,9 +263,9 @@ const onTabClick = (index: number) => {
           >{{ item }}</span
         >
       </div>
-      <div class="flex items-center gap-2 pr-1">
-        <span>搜</span>
-        <span>信</span>
+      <div class="flex items-center gap-4 pr-1">
+        <Search size="24" />
+        <Chat size="24" />
       </div>
     </div>
     <div
@@ -276,7 +273,7 @@ const onTabClick = (index: number) => {
       class="overflow-hidden h-[calc(100vh-7rem)] relative px-1"
       ref="scrollContainer"
     >
-      <div class="">
+      <div class="relative">
         <div
           class="w-full absolute p-4 box-border text-center text-gray-600"
           style="transform: translateY(-100%) translateZ(0)"
@@ -289,53 +286,66 @@ const onTabClick = (index: number) => {
             <div
               v-for="(item, index) in items"
               :key="index"
-              class="break-inside-avoid bg-white rounded shadow pb-2"
+              class="break-inside-avoid bg-white rounded-b-lg shadow pb-2"
             >
               <div>
                 <video
                   muted
                   loop
-                  class="h-36 w-full object-cover rounded"
+                  class="h-36 w-full object-cover rounded-t-md"
                   :ref="(el: any) => {
                     videoRefs && el && (videoRefs[index] = el)
                   }"
                   v-if="item.video"
                   :src="item.video"
                 ></video>
-                <img
+                <div
                   v-else
-                  :src="item.urls?.small"
-                  :alt="item.title"
-                  class="w-full object-cover rounded"
-                />
-                <!-- 视频右上角播放按钮 -->
-                <!-- 播放按钮 -->
-                <button
-                  v-if="item.video"
-                  @click="togglePlay(videoRefs[index])"
-                  class="absolute top-1 right-1 bg-black bg-opacity-50 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs z-10"
+                  class="relative w-full overflow-hidden rounded-t-md"
+                  :style="{ aspectRatio: `${item.width} / ${item.height}` }"
                 >
-                  ▶️
-                </button>
-              </div>
-              <div class="flex flex-col gap-1 px-2 pt-2">
-                <h2 class="text-blod text-xl">{{ item.title }}</h2>
-                <p class="text-xs opacity-80">{{ item.author }}</p>
-                <div class="flex items-center gap-2 opacity-85">
+                  <img
+                    :src="makeBlurDataURL(item.width, item.height)"
+                    :width="item.width"
+                    :height="item.height"
+                    class="w-full h-full object-cover transition-opacity duration-300"
+                    :style="{ opacity: imageLoaded[index] ? 0 : 1 }"
+                  />
                   <img
                     :src="item.urls?.small"
                     :alt="item.title"
-                    class="w-8 h-8 object-cover rounded-full"
+                    class="w-full object-cover absolute top-0 left-0 transition-opacity duration-300"
+                    :style="{ opacity: imageLoaded[index] ? 1 : 0 }"
+                    @load="handleImageLoad(index)"
                   />
-                  <span class="flex-1">{{ item.author }}</span>
-                  <span>赞 79</span>
+                </div>
+                <span
+                  v-if="item.video"
+                  @touchend="togglePlay(videoRefs[index], index)"
+                  @click="togglePlay(videoRefs[index], index)"
+                  class="absolute top-2 right-2 bg-black/50 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs z-10"
+                >
+                  <Pause v-if="currentVideoIndex === index" />
+                  <Play v-else />
+                </span>
+              </div>
+              <div class="flex flex-col gap-1 px-2 pt-2">
+                <p class="text-blod text-xl text-line-2">{{ item.title }}</p>
+                <p class="text-xs opacity-80">{{ item.author }}</p>
+                <div class="flex items-center gap-2 text-xs opacity-85">
+                  <img
+                    :src="item.urls?.small"
+                    :alt="item.title"
+                    class="w-6 h-6 object-cover rounded-full"
+                  />
+                  <span class="flex-1 truncate">{{ item.author }}</span>
+                  <span class="flex items-center gap-1"><Good size="14" /> 79</span>
                 </div>
               </div>
             </div>
           </wc-waterfall>
         </div>
-        <!-- <div v-else class="text-center text-gray-400 py-8">暂无内容</div> -->
-        <div class="w-full p-4 box-border text-center text-gray-600">
+        <div v-if="hasMore" class="w-full p-4 box-border text-center text-gray-600">
           <div v-if="!isPullUpLoad">
             <span>上划加载更多</span>
           </div>
@@ -343,12 +353,13 @@ const onTabClick = (index: number) => {
             <span>加载中...</span>
           </div>
         </div>
+        <div v-else class="text-center text-gray-400 py-8">暂无内容</div>
       </div>
     </div>
     <div v-show="activeTab != 1" class="h-[calc(100vh-7rem)] relative px-1">
       {{ tabs[activeTab].name }}...
     </div>
-    <ul class="px-8 h-16 w-full flex justify-between items-center">
+    <ul class="px-4 h-16 w-full flex justify-between items-center">
       <li
         v-for="(item, index) in tabs"
         :key="item.name"
@@ -359,8 +370,8 @@ const onTabClick = (index: number) => {
           })
         "
       >
-        <span>{{ index }}</span>
-        <span>{{ item.name }}</span>
+        <span><component :is="item.icon" size="24" /></span>
+        <span class="text-xs">{{ item.name }}</span>
       </li>
     </ul>
   </div>
