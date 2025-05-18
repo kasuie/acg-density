@@ -2,7 +2,7 @@
  * @Author: kasuie
  * @Date: 2025-02-23 10:01:07
  * @LastEditors: kasuie
- * @LastEditTime: 2025-05-17 21:41:49
+ * @LastEditTime: 2025-05-18 10:59:35
  * @Description:
 -->
 <script setup lang="ts">
@@ -11,7 +11,7 @@ import BScroll from "@better-scroll/core";
 import PullDown from "@better-scroll/pull-down";
 import PullUp from "@better-scroll/pull-up";
 import fetch from "@/lib/fetch";
-import { clsx } from "@kasuie/utils";
+import { clsx, debounce } from "@kasuie/utils";
 import {
   Home,
   Search,
@@ -108,7 +108,14 @@ const loadData = async (init: boolean = false) => {
         const { records, pages, current }: any = res.data;
         if (pages === current) hasMore.value = false;
         topTip.value = "加载完成";
-        const data: Array<Record<string, unknown>> = swapTwoRandomElements(records);
+        const data: Array<Record<string, unknown>> = swapTwoRandomElements(
+          records.map((v: Record<string, unknown>) => {
+            return {
+              ...v,
+              like: Math.floor(Math.random() * 100),
+            };
+          })
+        );
         if (init) {
           items.value = data;
         } else {
@@ -154,6 +161,7 @@ const initScroll = () => {
     BScroll.use(PullUp).use(PullDown);
     bs.value = new BScroll(scrollContainer.value, {
       scrollY: true,
+      click: true,
       pullUpLoad: {
         threshold: -50,
       },
@@ -198,6 +206,12 @@ const pullingUpHandler = async () => {
   });
 };
 
+function handleResize() {
+  console.log(">>>>>>>>>>handleResize");
+}
+
+const debouncedResize = debounce(handleResize, 300);
+
 onMounted(() => {
   const initPage = route.query.page;
   if (initPage) {
@@ -205,10 +219,12 @@ onMounted(() => {
   }
   initScroll();
   loadData();
+  window.addEventListener("resize", debouncedResize);
 });
 
 onUnmounted(() => {
   bs.value?.destroy();
+  window.removeEventListener("resize", debouncedResize);
 });
 
 const onNavClick = (key: string) => {
@@ -253,7 +269,7 @@ function handleImageLoad(index: number) {
       <div class="flex items-center flex-1 gap-6">
         <span
           :class="
-            clsx('relative nav-item', {
+            clsx('relative nav-item cursor-pointer', {
               'nav-item-active': item === activeNav,
             })
           "
@@ -263,9 +279,9 @@ function handleImageLoad(index: number) {
           >{{ item }}</span
         >
       </div>
-      <div class="flex items-center gap-4 pr-1">
-        <Search size="24" />
-        <Chat size="24" />
+      <div class="flex items-center gap-4 pr-1 cursor-pointer">
+        <Search size="22" />
+        <Chat size="22" />
       </div>
     </div>
     <div
@@ -281,7 +297,7 @@ function handleImageLoad(index: number) {
           <div v-html="topTip"></div>
         </div>
         <!-- 渲染瀑布流内容 -->
-        <div class="1columns-2 1gap-2" v-if="items.length">
+        <div class="select-none" v-if="items.length">
           <wc-waterfall gap="4" cols="2">
             <div
               v-for="(item, index) in items"
@@ -321,7 +337,6 @@ function handleImageLoad(index: number) {
                 </div>
                 <span
                   v-if="item.video"
-                  @touchend="togglePlay(videoRefs[index], index)"
                   @click="togglePlay(videoRefs[index], index)"
                   class="absolute top-2 right-2 bg-black/50 text-white rounded-full w-6 h-6 flex items-center justify-center text-xs z-10"
                 >
@@ -336,10 +351,12 @@ function handleImageLoad(index: number) {
                   <img
                     :src="item.urls?.small"
                     :alt="item.title"
-                    class="w-6 h-6 object-cover rounded-full"
+                    class="w-6 h-6 object-cover rounded-full cursor-pointer"
                   />
-                  <span class="flex-1 truncate">{{ item.author }}</span>
-                  <span class="flex items-center gap-1"><Good size="14" /> 79</span>
+                  <span class="flex-1 truncate cursor-pointer">{{ item.author }}</span>
+                  <span class="flex items-center gap-1 cursor-pointer"
+                    ><Good size="14" /> {{ item.like }}</span
+                  >
                 </div>
               </div>
             </div>
@@ -355,6 +372,11 @@ function handleImageLoad(index: number) {
         </div>
         <div v-else class="text-center text-gray-400 py-8">暂无内容</div>
       </div>
+      <div
+        class="fixed cursor-pointer bottom-24 w-10 h-10 right-3 text-xs flex items-center justify-center text-white rounded-full publish-button"
+      >
+        发帖
+      </div>
     </div>
     <div v-show="activeTab != 1" class="h-[calc(100vh-7rem)] relative px-1">
       {{ tabs[activeTab].name }}...
@@ -365,9 +387,12 @@ function handleImageLoad(index: number) {
         :key="item.name"
         @click="() => onTabClick(index)"
         :class="
-          clsx('flex flex-col justify-center text-sm items-center px-3 duration-300 ease-in-out', {
-            'active-tab': index === activeTab,
-          })
+          clsx(
+            'flex flex-col justify-center cursor-pointer text-sm items-center px-3 duration-300 ease-in-out',
+            {
+              'active-tab': index === activeTab,
+            }
+          )
         "
       >
         <span><component :is="item.icon" size="24" /></span>
