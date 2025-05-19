@@ -2,7 +2,7 @@
  * @Author: kasuie
  * @Date: 2025-02-23 10:01:07
  * @LastEditors: kasuie
- * @LastEditTime: 2025-05-19 09:44:13
+ * @LastEditTime: 2025-05-19 09:51:09
  * @Description:
 -->
 <script setup lang="ts">
@@ -293,7 +293,7 @@ function handleImageLoad(index: number) {
     </div>
     <div
       v-show="activeTab === 1"
-      class="overflow-hidden h-full relative px-1"
+      class="overflow-hidden h-[calc(100vh-7rem)] relative px-1"
       ref="scrollContainer"
     >
       <div class="relative">
