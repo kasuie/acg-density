@@ -2,7 +2,7 @@
  * @Author: kasuie
  * @Date: 2025-02-23 10:01:07
  * @LastEditors: kasuie
- * @LastEditTime: 2025-05-18 10:59:35
+ * @LastEditTime: 2025-05-19 09:44:13
  * @Description:
 -->
 <script setup lang="ts">
@@ -256,6 +256,13 @@ const togglePlay = (videoEl: HTMLVideoElement, index: number) => {
 
 const onTabClick = (index: number) => {
   activeTab.value = index;
+  if (index == 1 && !isLoading.value) {
+    loadData(true).then(() => {
+      setTimeout(() => {
+        bs.value?.refresh();
+      }, 50);
+    });
+  }
 };
 
 function handleImageLoad(index: number) {
@@ -286,7 +293,7 @@ function handleImageLoad(index: number) {
     </div>
     <div
       v-show="activeTab === 1"
-      class="overflow-hidden h-[calc(100vh-7rem)] relative px-1"
+      class="overflow-hidden h-full relative px-1"
       ref="scrollContainer"
     >
       <div class="relative">
@@ -296,7 +303,6 @@ function handleImageLoad(index: number) {
         >
           <div v-html="topTip"></div>
         </div>
-        <!-- 渲染瀑布流内容 -->
         <div class="select-none" v-if="items.length">
           <wc-waterfall gap="4" cols="2">
             <div
@@ -354,8 +360,15 @@ function handleImageLoad(index: number) {
                     class="w-6 h-6 object-cover rounded-full cursor-pointer"
                   />
                   <span class="flex-1 truncate cursor-pointer">{{ item.author }}</span>
-                  <span class="flex items-center gap-1 cursor-pointer"
-                    ><Good size="14" /> {{ item.like }}</span
+                  <span
+                    class="flex items-center gap-1 cursor-pointer"
+                    @click="
+                      () => {
+                        ++item.like;
+                      }
+                    "
+                  >
+                    <Good size="14" /> {{ item.like }}</span
                   >
                 </div>
               </div>
